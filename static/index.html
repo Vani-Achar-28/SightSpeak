@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SightSpeak</title>
+<style>
+  :root { --bg:#0b0f17; --fg:#ffffff; --accent:#ffd400; --card:#161c28; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,sans-serif;
+         display:flex; flex-direction:column; min-height:100vh; }
+  header { padding:14px 16px; font-size:1.4rem; font-weight:700; }
+  video { width:100%; max-height:50vh; object-fit:cover; background:#000; }
+  .controls { padding:12px 16px; display:flex; gap:10px; align-items:center; }
+  select { flex:1; font-size:1.1rem; padding:12px; border-radius:10px; background:var(--card); color:var(--fg); border:2px solid #333; }
+  #scan { margin:8px 16px; padding:28px; font-size:2rem; font-weight:800; border:none; border-radius:18px;
+          background:var(--accent); color:#000; cursor:pointer; }
+  #scan:disabled { opacity:.6; }
+  #result { margin:8px 16px 24px; padding:16px; background:var(--card); border-radius:14px; font-size:1.3rem; line-height:1.5; min-height:80px; }
+  button:focus-visible, select:focus-visible { outline:4px solid #4da3ff; }
+</style>
+</head>
+<body>
+  <header>SightSpeak 👁️</header>
+  <video id="video" autoplay playsinline muted aria-label="Camera preview"></video>
+
+  <div class="controls">
+    <label for="lang" style="font-size:1.1rem">Language</label>
+    <select id="lang">
+      <option value="en" data-voice="en-IN">English</option>
+      <option value="hi" data-voice="hi-IN">Hindi</option>
+      <option value="kn" data-voice="kn-IN">Kannada</option>
+      <option value="ta" data-voice="ta-IN">Tamil</option>
+      <option value="te" data-voice="te-IN">Telugu</option>
+      <option value="mr" data-voice="mr-IN">Marathi</option>
+      <option value="bn" data-voice="bn-IN">Bengali</option>
+    </select>
+  </div>
+
+  <button id="scan" aria-label="Scan what is in front of me">SCAN</button>
+  <div id="result" role="status" aria-live="polite">Point the camera and press SCAN.</div>
+  <canvas id="canvas" hidden></canvas>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const scanBtn = document.getElementById("scan");
+const result = document.getElementById("result");
+const langSel = document.getElementById("lang");
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }, audio: false
+    });
+    video.srcObject = stream;
+  } catch (e) {
+    result.textContent = "Camera not available. Allow camera permission (needs https or localhost).";
+  }
+}
+
+function speak(text, voiceLang) {
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = voiceLang;
+  u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+}
+
+async function scan() {
+  if (!video.videoWidth) { result.textContent = "Camera is not ready yet."; return; }
+  scanBtn.disabled = true;
+  result.textContent = "Scanning...";
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.85));
+
+  const form = new FormData();
+  form.append("file", blob, "frame.jpg");
+  form.append("lang", langSel.value);
+  form.append("conf", "0.25");
+
+  try {
+    const res = await fetch("/api/detect", { method: "POST", body: form });
+    const data = await res.json();
+    result.textContent = data.spoken;
+    speak(data.spoken, langSel.selectedOptions[0].dataset.voice);
+  } catch (e) {
+    result.textContent = "Could not reach the server.";
+  }
+  scanBtn.disabled = false;
+}
+
+scanBtn.addEventListener("click", scan);
+startCamera();
+</script>
+</body>
+</html>

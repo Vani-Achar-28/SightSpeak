@@ -1,4 +1,4 @@
-# SightSpeak 👁️
+# SightSpeak 
 
 **A multilingual AI vision assistant for visually impaired users.**
 Point a camera at a scene and SightSpeak tells you, out loud, what is around you, where it is, and how far away.
